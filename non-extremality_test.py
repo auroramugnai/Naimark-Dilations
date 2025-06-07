@@ -32,12 +32,6 @@ for _ in tqdm(range(num_attempt)):
     # Find the measurements on S associated to the Naimark projectors on S+M.
     MS0 = qt.ptrace(PiSM0 * (qt.tensor(I2, rhoM)), 0)
     MS1 = I2 - MS0
-
-
-    # Test for extremality.
-    # If the test succeds, then the measurement {MS0, MS1} is not extremal,
-    # because the test found a convex decomposition of it.
-    problem = Problem()
     
     # Condiser a convex decomposition M(a, lambda) of {MS0, MS1} = {MSa},
     # where lambda labels the decomposition element and a is the outcome.
@@ -71,6 +65,8 @@ for _ in tqdm(range(num_attempt)):
     #     Test fails   -> no decomposition found for {MS0, MS1} -> there's hope it's extremal.
     #     Test succeds -> decomposition found for {MS0, MS1} -> it's NOT extremal.
 
+    problem = Problem()
+    
     # Turn I2, MS0, MS1  to a pic constant.
     I2_pic = pic.Constant("I2", np.eye(2))
     MS0_pic = pic.Constant("MS0", MS0.full())
