@@ -4,7 +4,7 @@ import qutip as qt
 from picos.modeling.problem import Problem
 from tqdm import tqdm
 
-num_attempt = 3
+num_attempt = 6
 
 # Define identity matrices
 I2 = qt.qeye([2])
