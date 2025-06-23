@@ -96,7 +96,7 @@ for state in states:
     else:
         p_guess += t1
 
-problem.add_constraint(p_guess == p_classical)
+problem.add_constraint(p_guess == p_classical) # Comment this to get problem.value ≈ 1
 
 # === Objective: Maximize P guess ===
 problem.set_objective('max', p_guess)
