@@ -98,13 +98,16 @@ for state in states:
 
 problem.add_constraint(p_guess == p_classical) # Comment this to get problem.value ≈ 1
 
+
 # === Objective: Maximize P guess ===
 problem.set_objective('max', p_guess)
+
 
 # === Solve the problem ===
 # prob.set_objective('max', obj)
 setNumericalPrecisionForSolver(problem)
 problem.solve(solver="mosek", verbosity=0)
+
 
 # === Output results ===
 print("\nOptimal objective value:", problem.value)
