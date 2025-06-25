@@ -62,16 +62,16 @@ probabilities = [pic.RealVariable(f'p_{lamda}', lower=0) for lamda in range(n_el
 # Probabilities must be non-negative and sum to 1.
 for p in probabilities:
     problem.add_constraint(p >= 0)
-problem.add_constraint(sum(probabilities)==1)
+problem.add_constraint(sum(probabilities) == 1)
 
 
 # === Define quantum states (density matrices) and constraints ===
 states = [pic.HermitianVariable(f'phi_{lamda}', (dim,dim)) for lamda in range(n_elements)]
 
 # Each state must be positive semidefinite and have trace equal to its probability.
-for i,p in enumerate(probabilities):
-    problem.add_constraint(states[i] >> 0)
-    problem.add_constraint(pic.trace(states[i]) == p)
+for state, p in zip(states, probabilities):
+    problem.add_constraint(state >> 0)
+    problem.add_constraint(pic.trace(states) == p)
 
 
 # === Define average state (rho) and constraints ===
