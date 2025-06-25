@@ -96,7 +96,8 @@ for state in states:
     else:
         p_guess += t1
 
-problem.add_constraint(p_guess == p_classical) # Comment this to get problem.value ≈ 1
+problem.add_constraint(p_guess == p_classical) # Comment this and fix the rhos found by the sdp 
+                                               # to check that p_guess == p_classical.
 
 
 # === Objective: Maximize P guess ===
