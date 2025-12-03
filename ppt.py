@@ -144,12 +144,12 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
     problem = pic.Problem()
     
 
-    ###  --- Variables --- ###
+    # -------------------- Variables -------------------- #
     rhoSA_list = [pic.HermitianVariable(f"|Ψ_{i}XΨ_{i}|", shape=(dim, dim)) for i in range(dim)]
     rhoSA = pic.sum(rhoSA_list)
 
 
-    ###  --- Constraints --- ###
+    # ------------------- Constraints ------------------- #
     # Positivity and normalization.
     problem.add_list_of_constraints([r >> 0 for r in rhoSA_list])
     problem.add_constraint(pic.trace(rhoSA) == 1)
@@ -161,7 +161,7 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
     problem.add_constraint(sum([rhoSA_i.partial_transpose(1) for rhoSA_i in rhoSA_list]) >> 0)
 
 
-    ### --- Objective --- ###
+    # -------------------- Objective -------------------- #
     # maximize p_guess = Σ Tr(Pi ρ_i)
     objective = pic.Constant(0) 
     for rho_i, PiSA_i in zip(rhoSA_list, PiSA_list):
@@ -196,11 +196,11 @@ def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
     problem = pic.Problem()
 
 
-    ###  --- Variables --- ###
+    # -------------------- Variables  --------------------#
     PiSA_list = [pic.HermitianVariable(f"PiSA[{i}]", shape=(4, 4)) for i in range(dim)]
     
 
-    ###  --- Constraints --- ###
+    # ------------------- Constraints ------------------- #
     # Positivity and completeness.
     problem.add_list_of_constraints([PiSA_i >> 0 for PiSA_i in PiSA_list])
     problem.add_constraint(sum(PiSA_list) == np.eye(dim))
@@ -219,7 +219,7 @@ def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
         problem.add_constraint(expr == MS_i.full())
 
 
-    ### --- Objective --- ###
+    # -------------------- Objective -------------------- #
     # maximize p_guess = Σ Tr(Pi ρ_i)
     objective = pic.Constant(0) 
     for rho_i, PiSA_i in zip(rhoSA_list, PiSA_list):
@@ -232,65 +232,60 @@ def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
 
     return objective.value.real, [PiSA_i.value_as_matrix for PiSA_i in PiSA_list]
 
+
 ################################################################################################
 #############################            MAIN              #####################################
 ################################################################################################
 if __name__ == "__main__":
 
-    # ------------- State ------------- #
-    ### Build a basis |Ψ_i⟩_SA.
+    # -------------------- State -------------------- #
+    # Build a basis |Ψ_i⟩_SA.
     basis = buildEntangledBasis(theta=0, verbosity=0)
 
-    ### From the basis, build an entangled rhoSA.
+    # From the basis, build an entangled rhoSA.
     rhoSA, probabilities = find_entangled_rhoSA(basis)
     assert np.isclose(sum(probabilities), 1), "!!! Probabilities do not sum to 1."
 
-    ### Or use uniform probabilities ( like in the paper ).
+    # Or use uniform probabilities ( like in the paper ).
     # probabilities = [1/4]*4
     # rhoSA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
-
 
     rhoSA_list = [p * (psi * psi.dag()).full() for psi, p in zip(basis, probabilities)]
     assert np.isclose(sum([np.trace(rhoSA_i) for rhoSA_i in rhoSA_list]), 1), "!!! rhoSA doesn't have trace 1."
 
-    ### Check entanglement of rhoSA.
+    # Check entanglement of rhoSA.
     check_SA_entanglement(rhoSA)
 
-    ### rhoS = Tr_A(rhoSA).
+    # rhoS = Tr_A(rhoSA).
     rhoS = rhoSA.ptrace(0).full()
     rhoA = rhoSA.ptrace(1).full()
 
     
-    # ------------- Measurement ------------- #
-    ### PiSA_i = |Ψ_i⟩⟨Ψ_i|.
+    # ----------------- Measurement ----------------- #
+    # PiSA_i = |Ψ_i⟩⟨Ψ_i|.
     PiSA = [psi * psi.dag() for psi in basis]
     PiSA_list = [PiSA_i.full() for PiSA_i in PiSA]
 
-    ### M_S_i = TrA[PiSA_i * (1⊗rhoA)]
+    # M_S_i = TrA[PiSA_i * (1⊗rhoA)]
     I2 = qt.qeye(2)
     x = qt.tensor(I2, qt.Qobj(rhoA))
     M_S = [(PiSA_i @ x).ptrace(0) for PiSA_i in PiSA]
 
-    ### Seesaw optimization ###
+
+    # ------------- Seesaw optimization ------------- #
     precision = 1e-7
     attempts = 10
     diffs = []
     new_p_guess = 0
     for _ in tqdm(range(attempts)):
         
-        old_p_guess, PiSA_list = find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1)
-        # print(f"p_guess optimizing PiSA: {old_p_guess}") 
+        old_p_guess, PiSA_list = find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1) 
 
-        diffs.append(new_p_guess - old_p_guess)
+        diffs.append(new_p_guess - old_p_guess) # Collect data for the plot.
         
         new_p_guess, rhoSA_list = find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1)
-        # print(f"p_guess optimizing rhoSA: {new_p_guess}\n")
-        
-        # print("new_p_guess - old_p_guess ", new_p_guess - old_p_guess )
 
-        # collect data to make convergence plot
-        
-        diffs.append(new_p_guess - old_p_guess)
+        diffs.append(new_p_guess - old_p_guess) # Collect data for the plot.
 
         if abs(new_p_guess - old_p_guess) < precision:
             print(f"Converged guessing probability: {new_p_guess}")
@@ -298,7 +293,8 @@ if __name__ == "__main__":
 
     print(f"Final guessing probability after {len(diffs)} iterations: {new_p_guess}, with precision {abs(new_p_guess - old_p_guess)}.")
 
-    # make the plot
+
+    # --------------- Convergence plot  --------------- #
     plt.figure()
     plt.plot(diffs, marker='o')
     plt.xlabel('Iteration')
