@@ -1,3 +1,9 @@
+"""
+This script builds an entangled basis for the bipartite system S+A, constructs the corresponding
+entangled density matrix, and runs a seesaw optimization algorithm to test whether there exists
+a separable rho_SA that reproduces both the same reduced state on S and the same measurement on S.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import picos as pic
@@ -239,7 +245,7 @@ def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
 if __name__ == "__main__":
 
     # -------------------- State -------------------- #
-    # Build a basis |Ψ_i⟩_SA.
+    # Build a basis |psi_i⟩_SA.
     basis = buildEntangledBasis(theta=0, verbosity=0)
 
     # From the basis, build an entangled rhoSA.
