@@ -1,9 +1,25 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import picos as pic
 from picos.modeling.problem import Problem
 import qutip as qt
 from qutip import Qobj
+from tqdm import tqdm
 
+# ----------------------------------------------------------------------
+# Configure numerical precision for PICOS solvers
+# ----------------------------------------------------------------------
+def setNumericalPrecisionForSolver(problem):
+    """
+    Sets high numerical precision parameters for PICOS solvers.
+    """
+    problem.options["rel_ipm_opt_tol"] = 1e-14
+    problem.options["rel_prim_fsb_tol"] = 1e-14
+    problem.options["rel_dual_fsb_tol"] = 1e-14
+    problem.options["max_footprints"] = None
+    
+################################################################################################
+################################################################################################
 def buildEntangledBasis(theta, verbosity=0):
     """Build the entangled basis states Ψ_i for SA as described in the paper "Quantifying...".
     Parameters:
@@ -45,12 +61,12 @@ def buildEntangledBasis(theta, verbosity=0):
 
 ################################################################################################
 ################################################################################################
-def check_SA_entanglement(rho_SA):
-    """Check if 'rho_SA' is entangled by computing the Von Neumann entropies of the subsystems.
+def check_SA_entanglement(rhoSA):
+    """Check if 'rhoSA' is entangled by computing the Von Neumann entropies of the subsystems.
     
     Parameters:
     ----------
-    rho_SA : Qobj
+    rhoSA : Qobj
         The density matrix of the combined system S+A.
 
     Raises:
@@ -59,12 +75,12 @@ def check_SA_entanglement(rho_SA):
         If the entropies of S and A are not equal or if they are zero.
     """
     # Partial traces
-    rho_S = rho_SA.ptrace(0)
-    rho_A = rho_SA.ptrace(1)
+    rhoS = rhoSA.ptrace(0)
+    rhoA = rhoSA.ptrace(1)
 
     # Von Neumann entropies
-    S_S = qt.entropy_vn(rho_S)
-    S_A = qt.entropy_vn(rho_A)
+    S_S = qt.entropy_vn(rhoS)
+    S_A = qt.entropy_vn(rhoA)
     
     assert np.isclose(S_S, S_A, atol=1e-8, rtol=1e-8), "!!! Entropies of S and A are not equal."
     assert S_S > 0, "!!! Entropy is zero, state is not entangled."
@@ -72,8 +88,8 @@ def check_SA_entanglement(rho_SA):
 
 ################################################################################################
 ################################################################################################
-def find_entangled_rho_SA(basis):
-    """Look for a probability distribution 'probabilities' that gives an entangled 'rho_SA'. 
+def find_entangled_rhoSA(basis):
+    """Look for a probability distribution 'probabilities' that gives an entangled 'rhoSA'. 
        To do this, randomly generate probability distributions until you find 
        one that gives a Negative Partial Transpose (NPT) state.
     Parameters:
@@ -82,10 +98,10 @@ def find_entangled_rho_SA(basis):
             The list of entangled basis states Ψ_i.
     Returns:
     -------
-        rho_SA : Qobj
+        rhoSA : Qobj
             The entangled density matrix of the combined system S+A.
         probabilities : np.ndarray
-            The probability distribution used to construct rho_SA.  
+            The probability distribution used to construct rhoSA.  
     """
     while True:
         #### Generate a probability distribution ####
@@ -93,24 +109,24 @@ def find_entangled_rho_SA(basis):
         probabilities /= probabilities.sum()
         assert np.isclose(probabilities.sum(), 1, atol=1e-8, rtol=1e-8), "Probabilities do not sum to 1."
 
-        #### Built rho_SA from 'basis' and 'probabilities'. ####
-        rho_SA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
+        #### Built rhoSA from 'basis' and 'probabilities'. ####
+        rhoSA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
         
         #### Check PPT criterion. ####
-        rho_SA_PT = qt.partial_transpose(rho_SA, [0,1])
+        rhoSA_PT = qt.partial_transpose(rhoSA, [0,1])
         
-        eigvals = rho_SA_PT.eigenenergies()
+        eigvals = rhoSA_PT.eigenenergies()
         if np.any(eigvals < -1e-12):
-            print("\n*** Entangled rho_SA found.")
+            # Entangled rhoSA found.
             break
 
-    return rho_SA, probabilities
+    return rhoSA, probabilities
 
 ################################################################################################
 ################################################################################################
 def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
     """Find the set of states {rhoSA_i} that maximizes the guessing probability
-       given a fixed reduced state rho_S and measurement PiSA.
+       given a fixed reduced state rhoS and measurement PiSA.
     Parameters:
     ----------
         rhoS : np.ndarray
@@ -122,7 +138,7 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
         p_guess : float
             The optimal guessing probability.
         rhoSA_list : list of np.ndarray
-            The list of optimal states rho_SA_i.
+            The list of optimal states rhoSA_i.
     """
     dim = 4 # Dimension of the total system S+A
     problem = pic.Problem()
@@ -138,7 +154,7 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
     problem.add_list_of_constraints([r >> 0 for r in rhoSA_list])
     problem.add_constraint(pic.trace(rhoSA) == 1)
 
-    # Tr_A(rho_SA) = rho_S.
+    # Tr_A(rhoSA) = rhoS.
     problem.add_constraint(pic.partial_trace(rhoSA, 1) == rhoS)
 
     # rhoSA must be separable: the partial transpose must be a positive matrix.
@@ -149,10 +165,11 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
     # maximize p_guess = Σ Tr(Pi ρ_i)
     objective = pic.Constant(0) 
     for rho_i, PiSA_i in zip(rhoSA_list, PiSA_list):
-        objective += pic.trace(rho_i @ PiSA_i)
+        objective += pic.trace(rho_i * np.array(PiSA_i))
 
     problem.set_objective("max", objective)
-    print("\n---- Optimization on rhoSA ----\n", problem)
+    # print("\n---- Optimization on rhoSA ----\n", problem)
+    setNumericalPrecisionForSolver(problem)
     problem.solve(solver="mosek", verbosity=0)
 
     return objective.value.real, [rhoSA_i.value_as_matrix for rhoSA_i in rhoSA_list]
@@ -161,13 +178,13 @@ def find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1):
 ################################################################################################
 def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
     """Find the set of measurement operators {PiSA_i} that maximizes the guessing probability
-       given a fixed set of states rho_SA_i.
+       given a fixed set of states rhoSA_i.
     Parameters:
     ----------
         M_S : list of np.ndarray
             The reduced measurement operators on system S.
         rhoSA_list : list of np.ndarray
-            The list of states rho_SA_i.
+            The list of states rhoSA_i.
     Returns:
     -------
         p_guess : float
@@ -196,71 +213,94 @@ def find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1):
         rhoSA_pic = [pic.Constant(r) for r in rhoSA_list]
         rhoA = [pic.partial_trace(r, 0) for r in rhoSA_pic]
         rhoA = pic.sum(rhoA)
-        print('type(rhoA):', type(rhoA))
+        
         # TrA[PiSA_i * (1⊗rhoA)]
         expr = pic.partial_trace(PiSA_list[i] * (I2 @ rhoA), 1)
-        problem.add_constraint(expr == MS_i)
+        problem.add_constraint(expr == MS_i.full())
 
 
     ### --- Objective --- ###
     # maximize p_guess = Σ Tr(Pi ρ_i)
     objective = pic.Constant(0) 
     for rho_i, PiSA_i in zip(rhoSA_list, PiSA_list):
-        objective += pic.trace(rho_i @ PiSA_i)
-    
+        objective += pic.trace(rho_i * PiSA_i)
+
     problem.set_objective("max", objective)
-    print("\n---- Optimization on PiSA ----\n", problem)
-    problem.solve(solver="mosek", verbosity=1)
+    # print("\n---- Optimization on PiSA ----\n", problem)
+    setNumericalPrecisionForSolver(problem)
+    problem.solve(solver="mosek", verbosity=0)
 
     return objective.value.real, [PiSA_i.value_as_matrix for PiSA_i in PiSA_list]
-
 
 ################################################################################################
 #############################            MAIN              #####################################
 ################################################################################################
 if __name__ == "__main__":
-    ### Build a basis |Ψ_i⟩ of SA.
-    basis = buildEntangledBasis(theta=0, verbosity=1)
 
-    ### From the basis, build an entangled rho_SA.
-    # rho_SA, probabilities = find_entangled_rho_SA(basis)
-    # rho_SA_list = [p * (psi * psi.dag()).full() for psi, p in zip(basis, probabilities)]
+    # ------------- State ------------- #
+    ### Build a basis |Ψ_i⟩_SA.
+    basis = buildEntangledBasis(theta=0, verbosity=0)
+
+    ### From the basis, build an entangled rhoSA.
+    rhoSA, probabilities = find_entangled_rhoSA(basis)
+    assert np.isclose(sum(probabilities), 1), "!!! Probabilities do not sum to 1."
 
     ### Or use uniform probabilities ( like in the paper ).
-    probabilities = [1/4]*4
-    rhoSA_list = [p * (psi * psi.dag()).full() for psi, p in zip(basis, probabilities)]
-    rho_SA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
-        
-    ### Check entanglement of rho_SA.
-    check_SA_entanglement(rho_SA)
+    # probabilities = [1/4]*4
+    # rhoSA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
 
-    ### rhoS = Tr_A(rho_SA).
-    # rhoS = qt.ptrace(rho_SA, 0)
-    rhoS = rho_SA.ptrace(0).full()
-    # print("rhoSA:\n", rho_SA, "\nrhoS:\n", rhoS, "\ntype(rhoS):", type(rhoS), "type(rho_SA):", type(rho_SA))
+
+    rhoSA_list = [p * (psi * psi.dag()).full() for psi, p in zip(basis, probabilities)]
+    assert np.isclose(sum([np.trace(rhoSA_i) for rhoSA_i in rhoSA_list]), 1), "!!! rhoSA doesn't have trace 1."
+
+    ### Check entanglement of rhoSA.
+    check_SA_entanglement(rhoSA)
+
+    ### rhoS = Tr_A(rhoSA).
+    rhoS = rhoSA.ptrace(0).full()
+    rhoA = rhoSA.ptrace(1).full()
+
     
+    # ------------- Measurement ------------- #
     ### PiSA_i = |Ψ_i⟩⟨Ψ_i|.
     PiSA = [psi * psi.dag() for psi in basis]
-    PiSA_list = [Pi.full() for Pi in PiSA]
+    PiSA_list = [PiSA_i.full() for PiSA_i in PiSA]
 
-    ### M_S_i = Tr_A(PiSA_i).
-    M_S = [Pi.ptrace(0).full() for Pi in PiSA]
-    
+    ### M_S_i = TrA[PiSA_i * (1⊗rhoA)]
+    I2 = qt.qeye(2)
+    x = qt.tensor(I2, qt.Qobj(rhoA))
+    M_S = [(PiSA_i @ x).ptrace(0) for PiSA_i in PiSA]
+
     ### Seesaw optimization ###
     precision = 1e-7
-    while True:
+    attempts = 10
+    diffs = []
+    new_p_guess = 0
+    for _ in tqdm(range(attempts)):
         
         old_p_guess, PiSA_list = find_meas_max_p_guess(M_S, rhoSA_list, verbosity=1)
-        print(f"Current guessing probability: {old_p_guess}") 
+        # print(f"p_guess optimizing PiSA: {old_p_guess}") 
+
+        diffs.append(new_p_guess - old_p_guess)
         
-
         new_p_guess, rhoSA_list = find_sep_states_max_p_guess(rhoS, PiSA_list, verbosity=1)
-        print(f"New guessing probability: {new_p_guess}\n")
-        # except Exception as e:
-        #     x = "\n" + "!"*20 + "\n"
-        #     print(x, "An error occurred during optimization:", str(e), x)
-        #     break
+        # print(f"p_guess optimizing rhoSA: {new_p_guess}\n")
+        
+        # print("new_p_guess - old_p_guess ", new_p_guess - old_p_guess )
 
-        if new_p_guess - old_p_guess < precision:
+        # collect data to make convergence plot
+        
+        diffs.append(new_p_guess - old_p_guess)
+
+        if abs(new_p_guess - old_p_guess) < precision:
             print(f"Converged guessing probability: {new_p_guess}")
             break
+
+    print(f"Final guessing probability after {len(diffs)} iterations: {new_p_guess}, with precision {abs(new_p_guess - old_p_guess)}.")
+
+    # make the plot
+    plt.figure()
+    plt.plot(diffs, marker='o')
+    plt.xlabel('Iteration')
+    plt.ylabel('Difference in Guessing Probability')
+    plt.show()  
