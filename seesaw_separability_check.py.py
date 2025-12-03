@@ -2,7 +2,10 @@
 This script builds an entangled basis for the bipartite system S+A, constructs the corresponding
 entangled density matrix, and runs a seesaw optimization algorithm to test whether there exists
 a separable rho_SA that reproduces both the same reduced state on S and the same measurement on S.
+Since the entangled rho_SA achieves a guessing probability p_guess = 1, the goal is to check whether
+a separable model can attain the same performance.
 """
+
 
 import matplotlib.pyplot as plt
 import numpy as np
