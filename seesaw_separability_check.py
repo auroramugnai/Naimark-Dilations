@@ -93,8 +93,6 @@ def check_SA_entanglement(rhoSA: Qobj) -> None:
     AssertionError
         If the entropies of S and A are not equal or if they are zero.
     """
-    rhoSA = qt.Qobj(rhoSA) if not isinstance(rhoSA, qt.Qobj) else rhoSA
-
     # Partial traces
     rhoS = rhoSA.ptrace(0)
     rhoA = rhoSA.ptrace(1)
@@ -124,8 +122,6 @@ def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[Qobj, np.ndarray]:
         probabilities : np.ndarray
             The probability distribution (length 4) used to construct rhoSA.  
     """
-    basis = [qt.Qobj(psi) if not isinstance(psi, qt.Qobj) else psi for psi in basis]
-
     while True:
         #### Generate a probability distribution ####
         probabilities = np.random.rand(4)
