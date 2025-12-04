@@ -79,35 +79,11 @@ def buildEntangledBasis(theta: float, verbosity: int = 0) -> List[Qobj]:
             print()
 
     return basis
-
-################################################################################################
-################################################################################################
-def check_SA_entanglement(rhoSA: Qobj) -> None:
-    """Check if 'rhoSA' is entangled by computing the Von Neumann entropies of the subsystems.
-    Parameters:
-    ----------
-    rhoSA : Qobj
-        The density matrix (4x4) of the combined system S+A.
-    Raises:
-    ------
-    AssertionError
-        If the entropies of S and A are not equal or if they are zero.
-    """
-    # Partial traces
-    rhoS = rhoSA.ptrace(0)
-    rhoA = rhoSA.ptrace(1)
-
-    # Von Neumann entropies
-    S_S = qt.entropy_vn(rhoS)
-    S_A = qt.entropy_vn(rhoA)
     
-    assert np.isclose(S_S, S_A, atol=1e-8, rtol=1e-8), "!!! Entropies of S and A are not equal."
-    assert S_S > 0, "!!! Entropy is zero, state is not entangled."
-    assert S_A > 0, "!!! Entropy is zero, state is not entangled."
 
 ################################################################################################
 ################################################################################################
-def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[Qobj, np.ndarray]:   
+def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[List[Qobj], np.ndarray]:   
     """Look for a probability distribution 'probabilities' that gives an entangled 'rhoSA'. 
        To do this, randomly generate probability distributions until you find 
        one that gives a Negative Partial Transpose (NPT) state.
@@ -117,7 +93,7 @@ def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[Qobj, np.ndarray]:
             The list of entangled basis states Ψ_i.
     Returns:
     -------
-        rhoSA : Qobj
+        rhoSA_list : List[Qobj]
             The entangled density matrix of the combined system S+A.
         probabilities : np.ndarray
             The probability distribution (length 4) used to construct rhoSA.  
@@ -128,18 +104,25 @@ def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[Qobj, np.ndarray]:
         probabilities /= probabilities.sum()
         assert np.isclose(probabilities.sum(), 1, atol=1e-8, rtol=1e-8), "Probabilities do not sum to 1."
 
-        #### Built rhoSA from 'basis' and 'probabilities'. ####
-        rhoSA = sum([p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)])
+        #### Build rhoSA from 'basis' and 'probabilities'. ####
+        rhoSA_list = [p * (psi * psi.dag()) for psi, p in zip(basis, probabilities)]
+        rhoSA = sum(rhoSA_list)
         
         #### Check PPT criterion. ####
         rhoSA_PT = qt.partial_transpose(rhoSA, [0,1])
-        
         eigvals = rhoSA_PT.eigenenergies()
-        if np.any(eigvals < -1e-12):
-            # Entangled rhoSA found.
-            break
+        if np.any(eigvals < -1e-12): # Entangled rhoSA found.
+            # Find the reduced states.
+            rhoS = rhoSA.ptrace(0)
+            rhoA = rhoSA.ptrace(1)
 
-    return rhoSA, probabilities
+            # Double check entanglement of rhoSA by looking at S and A Von Neumann entropies.
+            S_S = qt.entropy_vn(rhoS)
+            S_A = qt.entropy_vn(rhoA)
+            assert np.isclose(S_S, S_A), "!!! rho_SA is not entangled."
+            break
+    
+    return rhoSA_list, rhoS, rhoA, probabilities
 
 ################################################################################################
 ################################################################################################
@@ -267,19 +250,15 @@ if __name__ == "__main__":
     # Build a basis |psi_i⟩_SA.
     basis = buildEntangledBasis(theta=0, verbosity=0)
 
-    # From the basis, build an entangled rhoSA.
-    rhoSA, probabilities = find_entangled_rhoSA(basis)
+    # From the basis, build an entangled rhoSA and compute its marginals.
+    rhoSA_list, rhoS, rhoA, probabilities = find_entangled_rhoSA(basis)
     assert np.isclose(sum(probabilities), 1), "!!! Probabilities do not sum to 1."
-
-    rhoSA_list = [p * (psi * psi.dag()).full() for psi, p in zip(basis, probabilities)]
-    assert np.isclose(sum([np.trace(rhoSA_i) for rhoSA_i in rhoSA_list]), 1), "!!! rhoSA doesn't have trace 1."
-
-    # Check entanglement of rhoSA.
-    check_SA_entanglement(rhoSA)
-
-    # rhoS = Tr_A(rhoSA) and rhoA = Tr_S(rhoSA).
-    rhoS = rhoSA.ptrace(0).full()
-    rhoA = rhoSA.ptrace(1).full()
+    
+    # Convert all the Qobj to numpy matrices.
+    rhoSA_list = [rhoSA_i.full() for rhoSA_i in rhoSA_list]
+    assert np.isclose(sum([np.trace(r_i) for r_i in rhoSA_list]), 1), "!!! rhoSA doesn't have trace 1."
+    rhoS = rhoS.full()
+    rhoA = rhoA.full()
 
 
     # ----------------- Measurement ----------------- #
