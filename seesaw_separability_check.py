@@ -294,8 +294,7 @@ if __name__ == "__main__":
     # M_S_i = TrA[PiSA_i * (1⊗rhoA)]
     I2 = qt.qeye(2)
     x = qt.tensor(I2, qt.Qobj(rhoA))
-    M_S = [(PiSA_i @ x).ptrace(0) for PiSA_i in PiSA]
-      ## M_S = [((PiSA_i * x).ptrace(0)).full() for PiSA_i in PiSA]
+    M_S = [((PiSA_i * x).ptrace(0)).full() for PiSA_i in PiSA]
 
 
     # ------------- Seesaw optimization ------------- #
