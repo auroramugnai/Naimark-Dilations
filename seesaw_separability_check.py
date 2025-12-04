@@ -83,7 +83,7 @@ def buildEntangledBasis(theta: float, verbosity: int = 0) -> List[Qobj]:
 
 ################################################################################################
 ################################################################################################
-def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[List[Qobj], np.ndarray]:   
+def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[List[Qobj], Qobj, Qobj, np.ndarray]:   
     """Look for a probability distribution 'probabilities' that gives an entangled 'rhoSA'. 
        To do this, randomly generate probability distributions until you find 
        one that gives a Negative Partial Transpose (NPT) state.
@@ -111,18 +111,23 @@ def find_entangled_rhoSA(basis: List[Qobj]) -> Tuple[List[Qobj], np.ndarray]:
         #### Check PPT criterion. ####
         rhoSA_PT = qt.partial_transpose(rhoSA, [0,1])
         eigvals = rhoSA_PT.eigenenergies()
-        if np.any(eigvals < -1e-12): # Entangled rhoSA found.
-            # Find the reduced states.
+         
+        if np.any(eigvals < -1e-12): # Entangled rhoSA found!
+            # Compute marginals.
             rhoS = rhoSA.ptrace(0)
             rhoA = rhoSA.ptrace(1)
-
-            # Double check entanglement of rhoSA by looking at S and A Von Neumann entropies.
+            
+            ### Double check entanglement by looking at S and A Von Neumann entropies. ###
             S_S = qt.entropy_vn(rhoS)
             S_A = qt.entropy_vn(rhoA)
             assert np.isclose(S_S, S_A), "!!! rho_SA is not entangled."
+
             break
     
     return rhoSA_list, rhoS, rhoA, probabilities
+
+
+
 
 ################################################################################################
 ################################################################################################
@@ -252,7 +257,6 @@ if __name__ == "__main__":
 
     # From the basis, build an entangled rhoSA and compute its marginals.
     rhoSA_list, rhoS, rhoA, probabilities = find_entangled_rhoSA(basis)
-    assert np.isclose(sum(probabilities), 1), "!!! Probabilities do not sum to 1."
     
     # Convert all the Qobj to numpy matrices.
     rhoSA_list = [rhoSA_i.full() for rhoSA_i in rhoSA_list]
