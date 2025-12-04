@@ -183,7 +183,7 @@ def find_sep_states_max_p_guess(rhoS: np.ndarray,
     # Tr_A(rhoSA) = rhoS.
     problem.add_constraint(pic.partial_trace(rhoSA, 1) == rhoS)
 
-    # rhoSA must be separable: the partial transpose must be a positive matrix.
+    # rhoSA must be separable (<-> PPT)
     problem.add_constraint(sum([rhoSA_i.partial_transpose(1) for rhoSA_i in rhoSA_list]) >> 0)
 
 
